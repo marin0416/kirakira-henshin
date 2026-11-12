@@ -188,6 +188,7 @@ header h1{margin:0;flex:1;font-size:clamp(18px,5.4vw,26px);font-weight:900;lette
   <div class="sky" id="appSky"></div>
   <header>
     <h1>キラキラ へんしん！</h1>
+    <button class="roundbtn" id="voiceBtn" aria-label="こえ"></button>
     <button class="roundbtn" id="soundBtn" aria-label="おと"></button>
   </header>
   <div id="main">
@@ -660,6 +661,8 @@ const IC={
   dice:`<svg viewBox="0 0 40 40"><rect x="5" y="5" width="30" height="30" rx="8" fill="#fff" stroke="#b28bff" stroke-width="3"/><circle cx="13" cy="13" r="3.2" fill="#ff6fae"/><circle cx="27" cy="13" r="3.2" fill="#ffbe2e"/><circle cx="20" cy="20" r="3.2" fill="#38b4f5"/><circle cx="13" cy="27" r="3.2" fill="#28c985"/><circle cx="27" cy="27" r="3.2" fill="#9b6bff"/></svg>`,
   again:`<svg viewBox="0 0 32 32"><path d="M8 16a8 8 0 1 0 3-6.2" stroke="#e2408f" stroke-width="3.2" fill="none" stroke-linecap="round"/><path d="M6 5v6h6" stroke="#e2408f" stroke-width="3.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/><polygon points="${starPts(16,16,4)}" fill="#ffd23f"/></svg>`,
   dress:`<svg viewBox="0 0 32 32"><path d="M12 4h8l-1 6 7 18H6l7-18z" fill="#ff8dc7" stroke="#e2408f" stroke-width="1.8" stroke-linejoin="round"/><path d="${heartPath(16,13,2.6)}" fill="#ffd84a"/></svg>`,
+  voice:`<svg viewBox="0 0 32 32"><path d="M6 6h20a3 3 0 0 1 3 3v11a3 3 0 0 1-3 3H15l-6 5v-5H6a3 3 0 0 1-3-3V9a3 3 0 0 1 3-3z" fill="#ff6fae" stroke="#e2408f" stroke-width="1.6" stroke-linejoin="round"/><circle cx="10.5" cy="14.5" r="2" fill="#fff"/><circle cx="16" cy="14.5" r="2" fill="#fff"/><circle cx="21.5" cy="14.5" r="2" fill="#fff"/></svg>`,
+  voiceOff:`<svg viewBox="0 0 32 32"><path d="M6 6h20a3 3 0 0 1 3 3v11a3 3 0 0 1-3 3H15l-6 5v-5H6a3 3 0 0 1-3-3V9a3 3 0 0 1 3-3z" fill="#c9b6d9" stroke="#a48cb9" stroke-width="1.6" stroke-linejoin="round"/><path d="M11 10l10 9M21 10l-10 9" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/></svg>`,
   close:`<svg viewBox="0 0 32 32"><path d="M9 9l14 14M23 9L9 23" stroke="#e2408f" stroke-width="3.6" stroke-linecap="round"/></svg>`,
 };
 
@@ -751,7 +754,7 @@ const SFX={
    BGM（その場で えんそう する シーケンサー）
    ========================================================= */
 const BGM_VOL=.62;
-let bgmBus=null, noiseBuf=null;
+let bgmBus=null, songBus=null, noiseBuf=null;
 function ensureBgm(){
   if(!AC||bgmBus) return;
   bgmBus=AC.createGain(); bgmBus.gain.value=BGM_VOL; bgmBus.connect(master);
@@ -770,7 +773,7 @@ function bt(m,t,dur,type,vol,o={}){
   g.gain.exponentialRampToValueAtTime(.0001,t+rel);
   let n=os;
   if(o.lp){const fl=AC.createBiquadFilter();fl.type='lowpass';fl.frequency.value=o.lp;fl.Q.value=o.q||1;os.connect(fl);n=fl;}
-  n.connect(g); g.connect(bgmBus); os.start(t); os.stop(t+rel+.05);
+  n.connect(g); g.connect(songBus); os.start(t); os.stop(t+rel+.05);
 }
 function bn(t,dur,type,freq,vol,sweepTo){
   const s=AC.createBufferSource(); s.buffer=noiseBuf;
@@ -778,7 +781,7 @@ function bn(t,dur,type,freq,vol,sweepTo){
   if(sweepTo) fl.frequency.exponentialRampToValueAtTime(sweepTo,t+dur);
   const g=AC.createGain(); g.gain.setValueAtTime(.0001,t);
   g.gain.exponentialRampToValueAtTime(vol,t+(sweepTo?dur*.9:.003)); g.gain.exponentialRampToValueAtTime(.0001,t+dur);
-  s.connect(fl); fl.connect(g); g.connect(bgmBus); s.start(t,Math.random()*.5); s.stop(t+dur+.02);
+  s.connect(fl); fl.connect(g); g.connect(songBus); s.start(t,Math.random()*.5); s.stop(t+dur+.02);
 }
 const DR={
   kick(t,v=.55){bt(150,t,.18,'sine',v,{hz:1,slide:42});},
@@ -868,22 +871,29 @@ const BG={name:null,step:0,next:0,timer:null};
 function playBGM(name){
   if(!AC) return; ensureBgm();
   if(BG.name===name) return;
+  // まえの きょくは すっと けして、あたらしい きょくへ
+  if(songBus){ const old=songBus; old.gain.setTargetAtTime(0,AC.currentTime,.025); setTimeout(()=>{try{old.disconnect();}catch(e){}},600); }
+  songBus=AC.createGain(); songBus.gain.value=1; songBus.connect(bgmBus);
   BG.name=name; BG.step=0; BG.next=AC.currentTime+.06;
-  if(!BG.timer) BG.timer=setInterval(schedBGM,25);
+  if(!BG.timer) BG.timer=setInterval(schedBGM,40);
 }
 function schedBGM(){
   if(!AC||!BG.name) return;
   const sg=SONGS[BG.name], sd=60/sg.bpm/sg.div;
-  if(BG.next<AC.currentTime-.3) BG.next=AC.currentTime+.02; // ながく とまっていたとき
-  while(BG.next<AC.currentTime+.14){
+  if(AC.state!=='running'){ if(!document.hidden){ try{AC.resume();}catch(e){} } return; }
+  if(BG.next<AC.currentTime) BG.next=AC.currentTime+.03; // おくれたら いまから つづける
+  // がめんの かきかえで とまっても とぎれないよう、さきまで よやく しておく
+  while(BG.next<AC.currentTime+.7){
     try{ sg.at(BG.step%sg.len,BG.next,sd); }catch(e){}
     BG.next+=sd; BG.step++;
   }
 }
-function duck(on){ if(bgmBus&&AC) bgmBus.gain.setTargetAtTime(on?BGM_VOL*.35:BGM_VOL,AC.currentTime,.08); }
+function duck(on){ if(bgmBus&&AC) bgmBus.gain.setTargetAtTime(on?BGM_VOL*.6:BGM_VOL,AC.currentTime,.1); }
 document.addEventListener('visibilitychange',()=>{ if(!AC) return; if(document.hidden){ AC.suspend(); if(silEl) silEl.pause(); } else { AC.resume(); } });
 
 /* こえ（ブラウザの よみあげ） */
+let voiceOn=true;
+try{ if(localStorage.getItem('kirakira-voice')==='off') voiceOn=false; }catch(e){}
 let jaVoice=null;
 function pickVoice(){
   if(!('speechSynthesis' in window)) return;
@@ -895,9 +905,9 @@ function pickVoice(){
 }
 if('speechSynthesis' in window){ pickVoice(); speechSynthesis.onvoiceschanged=pickVoice; }
 function say(text,pitch=1.35,rate=1.02){
-  if(muted||!('speechSynthesis' in window)) return;
+  if(!voiceOn||muted||!('speechSynthesis' in window)) return;
   try{ speechSynthesis.cancel(); const u=new SpeechSynthesisUtterance(text); u.lang='ja-JP'; if(jaVoice) u.voice=jaVoice; u.pitch=pitch; u.rate=rate; u.volume=1;
-    duck(true); clearTimeout(say._t); const up=()=>{clearTimeout(say._t);duck(false);}; u.onend=up; u.onerror=up; say._t=setTimeout(up,Math.min(6000,900+text.length*190));
+    duck(true); clearTimeout(say._t); const up=()=>{clearTimeout(say._t);duck(false);if(AC&&AC.state!=='running'&&!document.hidden){try{AC.resume();}catch(e){}}}; u.onend=up; u.onerror=up; say._t=setTimeout(up,Math.min(4500,700+text.length*170));
     speechSynthesis.speak(u);}catch(e){duck(false);}
 }
 
@@ -1105,6 +1115,10 @@ $('randomBtn').addEventListener('click',()=>{
 function updateSoundBtn(){$('soundBtn').innerHTML=muted?IC.mute:IC.sound;}
 $('soundBtn').addEventListener('click',()=>{muted=!muted;updateSoundBtn();if(muted&&'speechSynthesis' in window)speechSynthesis.cancel();if(!muted){initAudio();}if(master)master.gain.setTargetAtTime(muted?0:.5,AC.currentTime,.03);if(!muted){playBGM(phase==='idle'?'dress':BG.name||'dress');SFX.select();}});
 updateSoundBtn();
+function updateVoiceBtn(){$('voiceBtn').innerHTML=voiceOn?IC.voice:IC.voiceOff;}
+$('voiceBtn').addEventListener('click',()=>{voiceOn=!voiceOn;updateVoiceBtn();try{localStorage.setItem('kirakira-voice',voiceOn?'on':'off');}catch(e){}
+  if(!voiceOn&&'speechSynthesis' in window){speechSynthesis.cancel();duck(false);} initAudio(); SFX.tap(); if(voiceOn) say('こえを だすよ！',1.5);});
+updateVoiceBtn();
 
 /* =========================================================
    タイトル
