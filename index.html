@@ -75,7 +75,7 @@ header h1{margin:0;flex:1;font-size:clamp(18px,5.4vw,26px);font-weight:900;lette
 #randomBtn{position:absolute;left:3%;bottom:4%;z-index:4}
 
 /* ===== パネル ===== */
-#panel{position:relative;z-index:3;flex:0 0 auto;background:rgba(255,255,255,.82);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+#panel{position:relative;z-index:3;flex:0 0 auto;background:rgba(255,255,255,.9);
   border-radius:28px 28px 0 0;box-shadow:0 -4px 18px rgba(170,90,180,.18);padding:8px 8px calc(10px + env(safe-area-inset-bottom))}
 #tabs{display:flex;gap:6px;justify-content:space-between}
 .tab{flex:1;height:64px;border-radius:18px;background:#f7ecfb;display:flex;flex-direction:column;align-items:center;justify-content:center;font-weight:800;font-size:13px;color:#9a76b5;transition:transform .15s}
@@ -126,15 +126,18 @@ header h1{margin:0;flex:1;font-size:clamp(18px,5.4vw,26px);font-weight:900;lette
 .tf-bg{position:absolute;inset:0;background:radial-gradient(circle at 50% 45%,#6c49b8 0%,#2b1f63 55%,#140f36 100%);transition:opacity 1s}
 .tf-bright{position:absolute;inset:0;opacity:0;transition:opacity .8s}
 #tf.bright .tf-bright{opacity:1}
-.rays{position:absolute;left:50%;top:45%;width:240vmax;height:240vmax;margin:-120vmax 0 0 -120vmax;opacity:0;transition:opacity .8s;
-  background:repeating-conic-gradient(rgba(255,255,255,.22) 0deg 8deg,transparent 8deg 20deg);
-  -webkit-mask-image:radial-gradient(circle,#000 0,transparent 60%);mask-image:radial-gradient(circle,#000 0,transparent 60%);animation:spin 18s linear infinite}
+.rays{position:absolute;left:50%;top:45%;width:64vmax;height:64vmax;margin:-32vmax 0 0 -32vmax;opacity:0;transition:opacity .8s;border-radius:50%;
+  background:repeating-conic-gradient(rgba(255,255,255,.2) 0deg 8deg,transparent 8deg 20deg);will-change:transform;animation:rays 18s linear infinite}
+@keyframes rays{from{transform:scale(2.1) rotate(0)}to{transform:scale(2.1) rotate(360deg)}}
 #tf.go .rays{opacity:1}
 .tf-char{position:absolute;left:50%;top:6%;height:72%;aspect-ratio:2/3;transform:translateX(-50%);transition:transform .5s cubic-bezier(.3,1.6,.5,1)}
 .layer{position:absolute;inset:0}
 .layer svg{width:100%;height:100%;overflow:visible}
-.layer.plain{transition:filter .7s,opacity .5s}
-.sil{filter:brightness(0) invert(1) drop-shadow(0 0 8px #fff) drop-shadow(0 0 22px #ffc8f0) drop-shadow(0 0 40px #b9a6ff)}
+.layer.plain{transition:opacity .5s}
+.sil{filter:brightness(0) invert(1)}
+.tf-glow{position:absolute;left:-30%;top:-5%;width:160%;height:110%;border-radius:50%;opacity:0;transition:opacity .6s;pointer-events:none;background:radial-gradient(closest-side,rgba(255,255,255,.85) 0,rgba(255,210,245,.45) 45%,rgba(190,170,255,0) 100%)}
+#tf.go .tf-glow{opacity:1}
+#tf.bright .tf-glow{opacity:.5}
 .layer.silF{opacity:0;transition:opacity .5s}
 .layer.final{-webkit-clip-path:inset(100% 0 0 0);clip-path:inset(100% 0 0 0);transition:clip-path .8s ease-in-out,-webkit-clip-path .8s ease-in-out}
 .ring{position:absolute;left:-8%;width:116%;height:7%;border-radius:50%;top:100%;opacity:0;pointer-events:none;
@@ -211,6 +214,7 @@ header h1{margin:0;flex:1;font-size:clamp(18px,5.4vw,26px);font-weight:900;lette
   <div class="tf-bright" id="tfBright"></div>
   <div class="rays"></div>
   <div class="tf-char" id="tfChar">
+    <div class="tf-glow"></div>
     <div class="layer plain" id="lyPlain"></div>
     <div class="layer silF sil" id="lySil"></div>
     <div class="layer final" id="lyFinal"></div>
@@ -824,12 +828,12 @@ function playHenshinMusic(){
     for(let b=0;b<8;b++){
       const t=t0+(bar*8+b)*e;
       bt(b%2?r+12:r,t,e*.95,'sawtooth',.12,{lp:800});
-      bt(arp[b]+12+(bar>=2?12:0),t,e*.9,'square',.04+up,{lp:2800});
+      if(b%2===0||bar===3) bt(arp[b]+12+(bar>=2?12:0),t,e*1.6,'square',.045+up,{lp:2800});
       if(b%2===0) DR.kick(t,.5);
       if(b===2||b===6) DR.snare(t,.2);
       if(bar>=1&&b%2===1) DR.hat(t,.05);
     }
-    c.forEach(m=>bt(m+12,t0+bar*8*e,e*5,'sawtooth',.04+up,{lp:2200,att:.02}));
+    bt(c[0]+12,t0+bar*8*e,e*5,'sawtooth',.05+up,{lp:2200,att:.02}); bt(c[2]+12,t0+bar*8*e,e*5,'sawtooth',.04+up,{lp:2200,att:.02});
   }
   // さいごの しょうせつ：ドラムロール＋のぼっていく おと
   for(let k=0;k<8;k++) DR.snare(t0+(24+k*.5+4)*e,.07+k*.028);
@@ -850,7 +854,7 @@ function playHeroFanfare(){
     const c=CH[prog[bar]], r=ROOT[prog[bar]], last=bar===3;
     for(let b=0;b<8;b++){
       const s=bar*8+b, t=t0+s*e, ev=MEL_POSE.map[s];
-      if(ev){ const d=ev.l*e*(last?1.5:.95); bt(ev.m,t,d,'sawtooth',.07,{lp:3600,sus:1}); bt(ev.m,t,d,'triangle',.09,{sus:1}); bt(ev.m-12,t,d,'square',.03,{lp:1800,sus:1}); }
+      if(ev){ const d=ev.l*e*(last?1.5:.95); bt(ev.m,t,d,'sawtooth',.08,{lp:3600,sus:1}); bt(ev.m,t,d,'triangle',.1,{sus:1}); }
       if(!last){
         bt(b%2?r+12:r,t,e*.9,'sawtooth',.14,{lp:850});
         if(b===0||b===3||b===4) DR.kick(t,.55);
@@ -858,7 +862,6 @@ function playHeroFanfare(){
         if(b%2===1) DR.hat(t,.05);
       }
     }
-    if(!last) c.forEach(m=>bt(m+12,t0+bar*8*e,e*7,'sawtooth',.03,{lp:1800,att:.03,sus:1}));
   }
   // さいごは ジャーン！と のばす
   const tf=t0+24*e; DR.kick(tf,.6); DR.snare(tf,.2);
@@ -897,7 +900,7 @@ function say(text){
 const cv=document.getElementById('fx'), cx=cv.getContext('2d');
 let DPR=1, W=0, H=0, parts=[];
 function resize(){
-  DPR=Math.min(window.devicePixelRatio||1,2); W=window.innerWidth; H=window.innerHeight;
+  DPR=Math.min(window.devicePixelRatio||1,1.5); W=window.innerWidth; H=window.innerHeight;
   cv.width=W*DPR; cv.height=H*DPR; cx.setTransform(DPR,0,0,DPR,0,0);
   document.documentElement.style.setProperty('--vh',(H/100)+'px');
 }
@@ -920,16 +923,20 @@ function drawShape(p){
 }
 function spawn(o){
   parts.push(Object.assign({x:0,y:0,vx:0,vy:0,g:0,drag:.98,size:10,rot:rnd(0,6.28),vr:rnd(-.1,.1),life:60,age:0,color:'#fff',type:'sparkle',seed:Math.random()*6,grow:0,glow:false},o));
-  if(parts.length>700) parts.splice(0,parts.length-700);
+  if(parts.length>260) parts.splice(0,parts.length-260);
 }
 function burst(x,y,n,types,colors,o={}){
+  n=Math.ceil(n*.6);
   for(let i=0;i<n;i++){
     const a=rnd(0,Math.PI*2), sp=rnd(o.min||2,o.max||7);
     spawn({x,y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp-(o.up||0),g:o.g??.08,size:rnd(o.smin||6,o.smax||14),life:rnd(40,75),type:pick(types),color:pick(colors),glow:true});
   }
 }
 let emitters=[];
+let idleFrames=0;
 function loop(){
+  if(!parts.length&&!emitters.length){ if(idleFrames<2){cx.clearRect(0,0,W,H);idleFrames++;} requestAnimationFrame(loop); return; }
+  idleFrames=0;
   cx.clearRect(0,0,W,H);
   for(const e of emitters) e.tick&&e.tick();
   for(let i=parts.length-1;i>=0;i--){
@@ -940,7 +947,6 @@ function loop(){
     const lf=1-p.age/p.life;
     if(lf<=0||p.size<=0){parts.splice(i,1);continue;}
     cx.save(); cx.globalAlpha=Math.min(1,lf*1.6); cx.translate(p.x,p.y); cx.rotate(p.rot);
-    if(p.glow){cx.shadowColor=p.color;cx.shadowBlur=8;}
     drawShape(p); cx.restore();
   }
   requestAnimationFrame(loop);
@@ -960,8 +966,8 @@ function fillSky(el,n){
     el.appendChild(d);
   }
 }
-fillSky(document.getElementById('titleSky'),26);
-fillSky(document.getElementById('appSky'),22);
+fillSky(document.getElementById('titleSky'),12);
+fillSky(document.getElementById('appSky'),10);
 
 /* =========================================================
    じょうたい
@@ -1150,7 +1156,7 @@ $('henshinBtn').addEventListener('click',()=>{
 
 function startSwirl(cxp,cyp,cols,types,my){
   const e={t:0,tick(){ if(token!==my){e.dead=true;return;} this.t++; if(this.t%2) return;
-    for(let i=0;i<2;i++) spawn({orbit:true,ox:cxp(),oy:cyp(),ang:rnd(0,6.28),va:rnd(.06,.11),rad:rnd(W*.18,Math.min(W,H)*.42),shrink:.985,flat:.45,rise:rnd(.2,.8),
+    for(let i=0;i<1;i++) spawn({orbit:true,ox:cxp(),oy:cyp(),ang:rnd(0,6.28),va:rnd(.06,.11),rad:rnd(W*.18,Math.min(W,H)*.42),shrink:.985,flat:.45,rise:rnd(.2,.8),
       size:rnd(5,12),life:rnd(60,100),type:pick(types),color:pick(cols),glow:true});
   }};
   emitters.push(e); return e;
@@ -1225,8 +1231,8 @@ async function runTransform(){
 }
 function confetti(my){
   const cols=['#FF6B9F','#FFD84A','#5EC2FF','#7EE3B5','#B28BFF','#fff','#FF9A3C'];
-  let n=0; const iv=setInterval(()=>{ if(my!==token||n++>24){clearInterval(iv);return;}
-    for(let i=0;i<6;i++) spawn({x:rnd(0,W),y:-10,vx:rnd(-1,1),vy:rnd(2,4),g:.04,drag:.995,size:rnd(8,13),life:rnd(150,230),type:pick(['confetti','confetti','star','heart']),color:pick(cols),vr:rnd(-.15,.15)});
+  let n=0; const iv=setInterval(()=>{ if(my!==token||n++>20){clearInterval(iv);return;}
+    for(let i=0;i<3;i++) spawn({x:rnd(0,W),y:-10,vx:rnd(-1,1),vy:rnd(2,4),g:.04,drag:.995,size:rnd(8,13),life:rnd(150,230),type:pick(['confetti','confetti','star','heart']),color:pick(cols),vr:rnd(-.15,.15)});
   },70);
 }
 function castMagic(x,y){
