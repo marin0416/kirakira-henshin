@@ -667,8 +667,29 @@ const IC={
    おと（Web Audio でその場で作る）
    ========================================================= */
 let AC=null, master=null, muted=false;
+// iPhoneの マナーモードでも おとが でるように する
+let silEl=null;
+function unlockSilent(){
+  try{ if(navigator.audioSession) navigator.audioSession.type='playback'; }catch(e){}
+  try{
+    if(!silEl){
+      const sr=8000,n=4000,buf=new ArrayBuffer(44+n),v=new DataView(buf);
+      const w=(o,str)=>{for(let i=0;i<str.length;i++)v.setUint8(o+i,str.charCodeAt(i));};
+      w(0,'RIFF');v.setUint32(4,36+n,true);w(8,'WAVE');w(12,'fmt ');v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,1,true);
+      v.setUint32(24,sr,true);v.setUint32(28,sr,true);v.setUint16(32,1,true);v.setUint16(34,8,true);w(36,'data');v.setUint32(40,n,true);
+      for(let i=0;i<n;i++)v.setUint8(44+i,128);
+      silEl=new Audio(URL.createObjectURL(new Blob([buf],{type:'audio/wav'})));
+      silEl.loop=true; silEl.setAttribute('playsinline','');
+    }
+    if(silEl.paused){ const pr=silEl.play(); if(pr&&pr.catch) pr.catch(()=>{}); }
+  }catch(e){}
+}
+function wakeAudio(){ if(!AC) return; unlockSilent(); if(AC.state!=='running'){ try{AC.resume();}catch(e){} } }
+document.addEventListener('pointerdown',wakeAudio,true);
+document.addEventListener('touchend',wakeAudio,true);
 function initAudio(){
-  if(AC){ if(AC.state==='suspended') AC.resume(); return; }
+  unlockSilent();
+  if(AC){ if(AC.state!=='running') AC.resume(); return; }
   try{ AC=new (window.AudioContext||window.webkitAudioContext)(); master=AC.createGain(); master.gain.value=.5;
     const comp=AC.createDynamicsCompressor(); master.connect(comp); comp.connect(AC.destination);
     // iOS のロックかいじょ
@@ -860,7 +881,7 @@ function schedBGM(){
   }
 }
 function duck(on){ if(bgmBus&&AC) bgmBus.gain.setTargetAtTime(on?BGM_VOL*.35:BGM_VOL,AC.currentTime,.08); }
-document.addEventListener('visibilitychange',()=>{ if(!AC) return; if(document.hidden) AC.suspend(); else AC.resume(); });
+document.addEventListener('visibilitychange',()=>{ if(!AC) return; if(document.hidden){ AC.suspend(); if(silEl) silEl.pause(); } else { AC.resume(); } });
 
 /* こえ（ブラウザの よみあげ） */
 let jaVoice=null;
