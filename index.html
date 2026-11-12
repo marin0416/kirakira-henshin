@@ -188,7 +188,6 @@ header h1{margin:0;flex:1;font-size:clamp(18px,5.4vw,26px);font-weight:900;lette
   <div class="sky" id="appSky"></div>
   <header>
     <h1>キラキラ へんしん！</h1>
-    <button class="roundbtn" id="voiceBtn" aria-label="こえ"></button>
     <button class="roundbtn" id="soundBtn" aria-label="おと"></button>
   </header>
   <div id="main">
@@ -670,28 +669,8 @@ const IC={
    おと（Web Audio でその場で作る）
    ========================================================= */
 let AC=null, master=null, muted=false;
-// iPhoneの マナーモードでも おとが でるように する
-let silEl=null;
-function unlockSilent(){
-  try{ if(navigator.audioSession) navigator.audioSession.type='playback'; }catch(e){}
-  try{
-    if(!silEl){
-      const sr=8000,n=4000,buf=new ArrayBuffer(44+n),v=new DataView(buf);
-      const w=(o,str)=>{for(let i=0;i<str.length;i++)v.setUint8(o+i,str.charCodeAt(i));};
-      w(0,'RIFF');v.setUint32(4,36+n,true);w(8,'WAVE');w(12,'fmt ');v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,1,true);
-      v.setUint32(24,sr,true);v.setUint32(28,sr,true);v.setUint16(32,1,true);v.setUint16(34,8,true);w(36,'data');v.setUint32(40,n,true);
-      for(let i=0;i<n;i++)v.setUint8(44+i,128);
-      silEl=new Audio(URL.createObjectURL(new Blob([buf],{type:'audio/wav'})));
-      silEl.loop=true; silEl.setAttribute('playsinline','');
-    }
-    if(silEl.paused){ const pr=silEl.play(); if(pr&&pr.catch) pr.catch(()=>{}); }
-  }catch(e){}
-}
-function wakeAudio(){ if(!AC) return; unlockSilent(); if(AC.state!=='running'){ try{AC.resume();}catch(e){} } }
-document.addEventListener('pointerdown',wakeAudio,true);
-document.addEventListener('touchend',wakeAudio,true);
+document.addEventListener('pointerdown',()=>{ if(AC&&AC.state!=='running'){ try{AC.resume();}catch(e){} } },true);
 function initAudio(){
-  unlockSilent();
   if(AC){ if(AC.state!=='running') AC.resume(); return; }
   try{ AC=new (window.AudioContext||window.webkitAudioContext)(); master=AC.createGain(); master.gain.value=.5;
     const comp=AC.createDynamicsCompressor(); master.connect(comp); comp.connect(AC.destination);
@@ -753,7 +732,7 @@ const SFX={
 /* =========================================================
    BGM（その場で えんそう する シーケンサー）
    ========================================================= */
-const BGM_VOL=.62;
+const BGM_VOL=.9;
 let bgmBus=null, songBus=null, noiseBuf=null;
 function ensureBgm(){
   if(!AC||bgmBus) return;
@@ -805,95 +784,68 @@ function parseMel(str){
 const CH={C:[60,64,67],Am:[57,60,64],F:[53,57,60],G:[55,59,62],Em:[52,55,59],E:[56,59,64],Dm:[50,53,57]};
 const ROOT={C:48,Am:45,F:41,G:43,Em:40,E:40,Dm:38};
 
-/* --- きせかえの きょく：かわいく はずむ --- */
-const MEL_DRESS=parseMel(`E5 G5 C6 - B5 . G5 . | A5 - G5 E5 C5 - . . | F5 A5 C6 - A5 . F5 . | G5 - A5 B5 D6 - . . |
-  E6 - D6 C6 B5 . G5 . | A5 . C6 . E6 - . . | D6 . C6 . A5 . F5 G5 | C6 - - - . . . .`);
-const PROG_DRESS=['C','Am','F','G','C','Am','F','C'];
-/* --- へんしん まえ：キラキラ ドキドキ --- */
-const PROG_READY=['Am','F','G','E'];
-/* --- へんしんちゅう：アップテンポで もりあがる --- */
-const PROG_BUILD=['Am','F','G','E'];
-/* --- けっめポーズ：ヒーローの テーマ --- */
-const MEL_HERO=parseMel(`A5 . C6 . F6 - E6 C6 | D6 - B5 G5 D6 . B5 . | E6 - D6 B5 G5 - B5 . | C6 - B5 A5 E5 - - . |
-  A5 C6 F6 - E6 F6 G6 . | G6 - F6 E6 D6 - B5 . | C6 . E6 . G6 - E6 G6 | C7 - - - - - . .`);
-const PROG_HERO=['F','G','Em','Am','F','G','C','C'];
-
-const SONGS={
-  dress:{bpm:116,div:2,len:64,at(s,t,sd){
-    const bar=Math.floor(s/8), b=s%8, ch=PROG_DRESS[bar], r=ROOT[ch];
-    const e=MEL_DRESS.map[s];
-    if(e){ bt(e.m,t,e.l*sd*1.6,'triangle',.11); bt(e.m+12,t,.5,'sine',.035); }
-    if(b===0) bt(r,t,sd*1.8,'sine',.2); if(b===4) bt(r+7,t,sd*1.6,'sine',.16); if(b===6) bt(r+12,t,sd*1.2,'sine',.13);
-    if(b===0||b===4) CH[ch].forEach(m=>bt(m,t,sd*3.6,'triangle',.028,{att:.03}));
-    if(b===2||b===6) CH[ch].forEach(m=>bt(m+12,t,sd*.8,'sine',.018));
-    if(b===0||b===4) DR.kick(t,.22);
-    if(b%2) DR.hat(t,.035);
-    if(b===2||b===6) DR.clap(t,.05);
-    if(s===63) bt(96,t,.8,'sine',.05);
-  }},
-  ready:{bpm:92,div:4,len:64,at(s,t,sd){
-    const bar=Math.floor(s/16), b=s%16, ch=PROG_READY[bar];
-    if(b===0) CH[ch].forEach((m,i)=>{bt(m,t,sd*16,'sawtooth',.03,{lp:900,att:.5,sus:1,detune:i*4});bt(m+12,t,sd*16,'triangle',.02,{att:.6,sus:1});});
-    if(b===0) bt(ROOT[ch]-12,t,sd*14,'sine',.16,{att:.2,sus:1});
-    if(b===0||b===3) DR.kick(t,b?.22:.32);
-    if(b%2===1) DR.hat(t,.012+(b/16)*.03);
-    if(Math.random()<.32){ const p=CH[ch][Math.floor(Math.random()*3)]+24+(Math.random()<.4?12:0); bt(p,t,.6,'triangle',.035); }
-    if(bar===3&&b===0) bn(t,sd*16,'bandpass',600,.07,5000);
-  }},
-  henshin:{bpm:160,div:4,len:64,at(s,t,sd){
-    const bar=Math.floor(s/16), b=s%16, ch=PROG_BUILD[bar], r=ROOT[ch], c=CH[ch];
-    if(b%2===0) bt((b%4===0)?r:r+12,t,sd*1.7,'sawtooth',.13,{lp:750});
-    const arp=[c[0],c[1],c[2],c[0]+12,c[1]+12,c[2]+12,c[0]+24,c[2]+12];
-    bt(arp[b%8]+12,t,sd*.9,'square',.035,{lp:2600});
-    if(b===0) c.forEach(m=>bt(m+12,t,sd*3,'sawtooth',.045,{lp:2200}));
-    if(b%4===0) DR.kick(t,.55);
-    if(b===4||b===12) DR.snare(t);
-    DR.hat(t,b%2?.05:.025);
-    if(bar===3&&b>=8){ DR.snare(t,.06+(b-8)*.025); }
-    if(bar===3&&b===0) bn(t,sd*16,'bandpass',500,.09,7000);
-    if(s===0) DR.crash(t,.12);
-  }},
-  hero:{bpm:160,div:2,len:64,at(s,t,sd){
-    const bar=Math.floor(s/8), b=s%8, ch=PROG_HERO[bar], r=ROOT[ch], c=CH[ch];
-    const e=MEL_HERO.map[s];
-    if(e){ const d=e.l*sd*.95; bt(e.m,t,d,'sawtooth',.06,{lp:3400,sus:1}); bt(e.m,t,d,'triangle',.075,{sus:1}); bt(e.m-12,t,d,'square',.022,{lp:1800,sus:1}); }
-    bt(b%2?r+12:r,t,sd*.9,'sawtooth',.13,{lp:800});
-    if(b%2===1) c.forEach(m=>bt(m+12,t,sd*.6,'square',.02,{lp:2400}));
-    if(b===0) c.forEach(m=>bt(m,t,sd*7,'sawtooth',.018,{lp:1400,att:.05,sus:1}));
-    if(b===0||b===3||b===4) DR.kick(t,.55);
-    if(b===2||b===6) DR.snare(t,.24);
-    DR.hat(t,b%2?.05:.03);
-    if((bar===0||bar===4)&&b===0) DR.crash(t,.16);
-    if(bar===7&&b>=4) DR.snare(t,.1+(b-4)*.04);
-  }},
-};
-const BG={name:null,step:0,next:0,timer:null};
-function playBGM(name){
-  if(!AC) return; ensureBgm();
-  if(BG.name===name) return;
-  // まえの きょくは すっと けして、あたらしい きょくへ
-  if(songBus){ const old=songBus; old.gain.setTargetAtTime(0,AC.currentTime,.025); setTimeout(()=>{try{old.disconnect();}catch(e){}},600); }
+/* --- へんしんの おんがく：タッチした しゅんかんに ぜんぶ よやく する（とちゅうで とぎれない） --- */
+const HEN_BPM=160, HEN_BEAT=60/HEN_BPM;
+function newSongBus(){
+  if(songBus){ const old=songBus; try{old.gain.setTargetAtTime(0,AC.currentTime,.03);}catch(e){} setTimeout(()=>{try{old.disconnect();}catch(e){}},500); }
   songBus=AC.createGain(); songBus.gain.value=1; songBus.connect(bgmBus);
-  BG.name=name; BG.step=0; BG.next=AC.currentTime+.06;
-  if(!BG.timer) BG.timer=setInterval(schedBGM,40);
 }
-function schedBGM(){
-  if(!AC||!BG.name) return;
-  const sg=SONGS[BG.name], sd=60/sg.bpm/sg.div;
-  if(AC.state!=='running'){ if(!document.hidden){ try{AC.resume();}catch(e){} } return; }
-  if(BG.next<AC.currentTime) BG.next=AC.currentTime+.03; // おくれたら いまから つづける
-  // がめんの かきかえで とまっても とぎれないよう、さきまで よやく しておく
-  while(BG.next<AC.currentTime+.7){
-    try{ sg.at(BG.step%sg.len,BG.next,sd); }catch(e){}
-    BG.next+=sd; BG.step++;
+function stopMusic(){ if(!AC||!songBus) return; const old=songBus; songBus=null; try{old.gain.setTargetAtTime(0,AC.currentTime,.04);}catch(e){} setTimeout(()=>{try{old.disconnect();}catch(e){}},500); }
+// へんしんちゅう（4しょうせつ＝6びょう）：だんだん たかく、だんだん つよく
+function playHenshinMusic(){
+  if(!AC||muted) return 0;
+  ensureBgm(); newSongBus();
+  const t0=AC.currentTime+.06, e=HEN_BEAT/2;
+  const prog=['Am','F','G','E'];
+  for(let bar=0;bar<4;bar++){
+    const c=CH[prog[bar]], r=ROOT[prog[bar]], up=bar*.012;
+    const arp=[c[0],c[1],c[2],c[0]+12,c[1]+12,c[2]+12,c[0]+24,c[2]+12];
+    for(let b=0;b<8;b++){
+      const t=t0+(bar*8+b)*e;
+      bt(b%2?r+12:r,t,e*.95,'sawtooth',.12,{lp:800});
+      bt(arp[b]+12+(bar>=2?12:0),t,e*.9,'square',.04+up,{lp:2800});
+      if(b%2===0) DR.kick(t,.5);
+      if(b===2||b===6) DR.snare(t,.2);
+      if(bar>=1&&b%2===1) DR.hat(t,.05);
+    }
+    c.forEach(m=>bt(m+12,t0+bar*8*e,e*5,'sawtooth',.04+up,{lp:2200,att:.02}));
   }
+  // さいごの しょうせつ：ドラムロール＋のぼっていく おと
+  for(let k=0;k<8;k++) DR.snare(t0+(24+k*.5+4)*e,.07+k*.028);
+  bn(t0+16*e,16*e,'bandpass',400,.1,8000);
+  bt(220,t0+24*e,8*e,'sawtooth',.05,{hz:1,slide:1760,lp:3000,att:.3,sus:1});
+  DR.crash(t0,.12);
+  return t0;
 }
-function duck(on){ if(bgmBus&&AC) bgmBus.gain.setTargetAtTime(on?BGM_VOL*.6:BGM_VOL,AC.currentTime,.1); }
-document.addEventListener('visibilitychange',()=>{ if(!AC) return; if(document.hidden){ AC.suspend(); if(silEl) silEl.pause(); } else { AC.resume(); } });
+// きめポーズ（4しょうせつ）：ヒーローの ファンファーレ
+const MEL_POSE=parseMel(`A5 C6 F6 - E6 F6 G6 . | G6 - F6 E6 D6 - B5 . | C6 . E6 . G6 - E6 G6 | C7 - - - - - - -`);
+function playHeroFanfare(){
+  if(!AC||muted) return;
+  ensureBgm(); newSongBus();
+  const t0=AC.currentTime+.03, e=HEN_BEAT/2;
+  const prog=['F','G','C','C'];
+  DR.crash(t0,.2); DR.crash(t0+24*e,.2);
+  for(let bar=0;bar<4;bar++){
+    const c=CH[prog[bar]], r=ROOT[prog[bar]], last=bar===3;
+    for(let b=0;b<8;b++){
+      const s=bar*8+b, t=t0+s*e, ev=MEL_POSE.map[s];
+      if(ev){ const d=ev.l*e*(last?1.5:.95); bt(ev.m,t,d,'sawtooth',.07,{lp:3600,sus:1}); bt(ev.m,t,d,'triangle',.09,{sus:1}); bt(ev.m-12,t,d,'square',.03,{lp:1800,sus:1}); }
+      if(!last){
+        bt(b%2?r+12:r,t,e*.9,'sawtooth',.14,{lp:850});
+        if(b===0||b===3||b===4) DR.kick(t,.55);
+        if(b===2||b===6) DR.snare(t,.24);
+        if(b%2===1) DR.hat(t,.05);
+      }
+    }
+    if(!last) c.forEach(m=>bt(m+12,t0+bar*8*e,e*7,'sawtooth',.03,{lp:1800,att:.03,sus:1}));
+  }
+  // さいごは ジャーン！と のばす
+  const tf=t0+24*e; DR.kick(tf,.6); DR.snare(tf,.2);
+  [36,48,60,64,67,72].forEach((m,i)=>bt(m,tf,2.6,'sawtooth',i<2?.12:.045,{lp:i<2?700:2400,att:.01}));
+  [84,88,91,96].forEach((m,i)=>bt(m,tf+.05+i*.07,1.6,'triangle',.05));
+}
 
 /* こえ（ブラウザの よみあげ） */
-let voiceOn=true;
-try{ if(localStorage.getItem('kirakira-voice')==='off') voiceOn=false; }catch(e){}
 let jaVoice=null;
 function pickVoice(){
   if(!('speechSynthesis' in window)) return;
@@ -905,10 +857,8 @@ function pickVoice(){
 }
 if('speechSynthesis' in window){ pickVoice(); speechSynthesis.onvoiceschanged=pickVoice; }
 function say(text,pitch=1.35,rate=1.02){
-  if(!voiceOn||muted||!('speechSynthesis' in window)) return;
-  try{ speechSynthesis.cancel(); const u=new SpeechSynthesisUtterance(text); u.lang='ja-JP'; if(jaVoice) u.voice=jaVoice; u.pitch=pitch; u.rate=rate; u.volume=1;
-    duck(true); clearTimeout(say._t); const up=()=>{clearTimeout(say._t);duck(false);if(AC&&AC.state!=='running'&&!document.hidden){try{AC.resume();}catch(e){}}}; u.onend=up; u.onerror=up; say._t=setTimeout(up,Math.min(4500,700+text.length*170));
-    speechSynthesis.speak(u);}catch(e){duck(false);}
+  if(muted||!('speechSynthesis' in window)) return;
+  try{ speechSynthesis.cancel(); const u=new SpeechSynthesisUtterance(text); u.lang='ja-JP'; if(jaVoice) u.voice=jaVoice; u.pitch=pitch; u.rate=rate; u.volume=1; speechSynthesis.speak(u);}catch(e){}
 }
 
 /* =========================================================
@@ -1113,12 +1063,8 @@ $('randomBtn').addEventListener('click',()=>{
   },90);
 });
 function updateSoundBtn(){$('soundBtn').innerHTML=muted?IC.mute:IC.sound;}
-$('soundBtn').addEventListener('click',()=>{muted=!muted;updateSoundBtn();if(muted&&'speechSynthesis' in window)speechSynthesis.cancel();if(!muted){initAudio();}if(master)master.gain.setTargetAtTime(muted?0:.5,AC.currentTime,.03);if(!muted){playBGM(phase==='idle'?'dress':BG.name||'dress');SFX.select();}});
+$('soundBtn').addEventListener('click',()=>{muted=!muted;updateSoundBtn();if(muted&&'speechSynthesis' in window)speechSynthesis.cancel();if(!muted){initAudio();}if(master)master.gain.setTargetAtTime(muted?0:.5,AC.currentTime,.03);if(muted)stopMusic();if(!muted){SFX.select();}});
 updateSoundBtn();
-function updateVoiceBtn(){$('voiceBtn').innerHTML=voiceOn?IC.voice:IC.voiceOff;}
-$('voiceBtn').addEventListener('click',()=>{voiceOn=!voiceOn;updateVoiceBtn();try{localStorage.setItem('kirakira-voice',voiceOn?'on':'off');}catch(e){}
-  if(!voiceOn&&'speechSynthesis' in window){speechSynthesis.cancel();duck(false);} initAudio(); SFX.tap(); if(voiceOn) say('こえを だすよ！',1.5);});
-updateVoiceBtn();
 
 /* =========================================================
    タイトル
@@ -1126,7 +1072,7 @@ updateVoiceBtn();
 $('titleHero').innerHTML=charSVG(S,{pose:'raise',mouth:'open'});
 $('titlePet').innerHTML=petSVG(S.pet);
 $('startBtn').addEventListener('click',()=>{
-  initAudio(); SFX.fanfare(); setTimeout(()=>playBGM('dress'),1500);
+  initAudio(); SFX.fanfare();
   const r=$('startBtn').getBoundingClientRect();
   burst(r.left+r.width/2,r.top+r.height/2,50,['star','heart','sparkle'],['#FF8DC7','#FFE14D','#B28BFF','#5EC2FF','#fff'],{max:10});
   say('キラキラ へんしん！ きせかえ して、まほうで へんしん しよう！',1.4);
@@ -1148,7 +1094,7 @@ $('backBtn').innerHTML=IC.dress+'きがえる';
 $('tfClose').innerHTML=IC.close;
 
 function openTransform(){
-  token++; phase='ready'; tapCount=0; playBGM('ready');
+  token++; phase='ready'; tapCount=0; stopMusic();
   const P=pal(S.color), it=byId(ITEMS,S.item);
   tf.classList.remove('hidden','go','bright');
   $('tfBright').style.background=`radial-gradient(circle at 50% 45%,#fff 0%,${P.light} 40%,${P.main} 100%)`;
@@ -1194,7 +1140,7 @@ async function runTransform(){
   $('tfBubble').classList.remove('show');
   say(it.spell.replace('！','')+'　キラキラ チェンジ！',1.45,1.0);
   SFX.whoosh();
-  playBGM('henshin'); const t0=AC?AC.currentTime+.06:0; const BEAT=375;
+  const t0=playHenshinMusic(); const BEAT=375;
   tf.classList.add('go');
   await sleep(BEAT); if(!ok()) return;
   // 1. ひかりの シルエット
@@ -1223,8 +1169,8 @@ async function runTransform(){
   // 4. フラッシュ！
   $('flash').classList.add('on'); SFX.sparkle(8);
   // きょくの きりかわりに ぴったり あわせる
-  await sleep(AC?Math.max(120,Math.min(900,(t0+6-AC.currentTime)*1000)):300); if(!ok()) return;
-  playBGM('hero');
+  await sleep((AC&&t0)?Math.max(120,Math.min(900,(t0+6-AC.currentTime)*1000)):300); if(!ok()) return;
+  playHeroFanfare();
   lySil.style.opacity=0;
   lyFinal.innerHTML=charSVG(S,{pose:'raise',mouth:'open'});
   tf.classList.add('bright');
@@ -1294,7 +1240,7 @@ tf.addEventListener('pointerdown',e=>{
 function closeTransform(){
   token++; phase='idle'; stopEmitters(); parts=[];
   if('speechSynthesis' in window) speechSynthesis.cancel();
-  tf.classList.add('hidden'); playBGM('dress');
+  tf.classList.add('hidden'); stopMusic();
   renderChar(true);
 }
 $('againBtn').addEventListener('click',()=>{SFX.tap();openTransform();});
